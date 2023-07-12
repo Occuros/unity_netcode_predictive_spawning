@@ -12,7 +12,7 @@ Something is missing, and this repo should help investigate this.
 
 ## Controls
 
-Move with `A` `S` `W` `D`, shoot with left mouse button.
+Move with `A` `S` `W` `D`, shoot with `left mouse button`.
 
 
 Associated forum thread:
