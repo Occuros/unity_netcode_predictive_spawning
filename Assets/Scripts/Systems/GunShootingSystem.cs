@@ -20,8 +20,6 @@ namespace DefaultNamespace
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            if (!SystemAPI.GetSingleton<NetworkTime>().IsFirstTimeFullyPredictingTick) return;
-            
             state.CompleteDependency();
             var ecb = new EntityCommandBuffer(state.WorldUpdateAllocator);
             new GunShootingJob()
@@ -29,21 +27,24 @@ namespace DefaultNamespace
                 ecb = ecb,
                 deltaTime = SystemAPI.Time.DeltaTime,
                 transformLookup = SystemAPI.GetComponentLookup<LocalTransform>(),
+                isFirstTime = SystemAPI.GetSingleton<NetworkTime>().IsFirstTimeFullyPredictingTick,
             }.Run();
             ecb.Playback(state.EntityManager);
         }
 
         [BurstCompile]
+        [WithAll(typeof(Simulate))]
         private partial struct GunShootingJob : IJobEntity
         {
             public float deltaTime;
             public EntityCommandBuffer ecb;
             public ComponentLookup<LocalTransform> transformLookup;
-            
+            public bool isFirstTime;
+
             public void Execute(ref Gun gun, in LocalToWorld ltw)
             {
                 gun.coolDown = math.max(gun.coolDown - deltaTime, 0);
-                if (gun.isShooting && gun.coolDown <= 0)
+                if (gun.isShooting && gun.coolDown <= 0 && isFirstTime)
                 {
                     gun.coolDown = 0.3f;
                     var transform = transformLookup[gun.bulletPrefab];
@@ -59,7 +60,5 @@ namespace DefaultNamespace
                 }
             }
         }
-
-
     }
 }
