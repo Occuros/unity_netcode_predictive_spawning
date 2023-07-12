@@ -14,20 +14,26 @@ namespace DefaultNamespace
     {
         public void OnCreate(ref SystemState state)
         {
-            state.RequireForUpdate<NetworkTime>();
+            state.RequireForUpdate<NetworkId>();
         }
 
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
+            if (!SystemAPI.GetSingleton<NetworkTime>().IsFirstTimeFullyPredictingTick)
+            {
+                return;
+            }
+
             state.CompleteDependency();
             var ecb = new EntityCommandBuffer(state.WorldUpdateAllocator);
-            new GunShootingJob()
+            new GunShootingJob
             {
                 ecb = ecb,
                 deltaTime = SystemAPI.Time.DeltaTime,
                 transformLookup = SystemAPI.GetComponentLookup<LocalTransform>(),
-                isFirstTime = SystemAPI.GetSingleton<NetworkTime>().IsFirstTimeFullyPredictingTick,
+                tick = SystemAPI.GetSingleton<NetworkTime>().ServerTick,
+                isClient = state.WorldUnmanaged.IsClient()
             }.Run();
             ecb.Playback(state.EntityManager);
         }
@@ -39,20 +45,41 @@ namespace DefaultNamespace
             public float deltaTime;
             public EntityCommandBuffer ecb;
             public ComponentLookup<LocalTransform> transformLookup;
-            public bool isFirstTime;
+            public NetworkTick tick;
+            public bool isClient;
+
 
             public void Execute(ref Gun gun, in LocalToWorld ltw)
             {
-                gun.coolDown = math.max(gun.coolDown - deltaTime, 0);
-                if (gun.isShooting && gun.coolDown <= 0 && isFirstTime)
+                if (gun.isShooting)
                 {
-                    gun.coolDown = 0.3f;
+                    var cooldownTicks = (int)(0.3f / deltaTime);
+
+                    var ticksElapsed = tick.TicksSince(gun.startShootTick);
+
+                    var shootTick = ticksElapsed % cooldownTicks;
+
+                    if (shootTick != 0)
+                    {
+                        return;
+                    }
+
+
+                    if (isClient)
+                    {
+                        Debug.Log($"Client: {tick.TickValue}");
+                    }
+                    else
+                    {
+                        Debug.Log($"Server: {tick.TickValue}");
+                    }
+
                     var transform = transformLookup[gun.bulletPrefab];
                     var bulletEntity = ecb.Instantiate(gun.bulletPrefab);
                     transform.Position = ltw.Position;
                     transform.Rotation = ltw.Rotation;
                     ecb.SetComponent(bulletEntity, transform);
-                    ecb.SetComponent(bulletEntity, new PhysicsVelocity()
+                    ecb.SetComponent(bulletEntity, new PhysicsVelocity
                     {
                         Angular = float3.zero,
                         Linear = ltw.Forward * 10,

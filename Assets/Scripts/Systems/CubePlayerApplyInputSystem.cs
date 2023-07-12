@@ -14,11 +14,19 @@ namespace DefaultNamespace
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
+            if (!SystemAPI.GetSingleton<NetworkTime>().IsFirstTimeFullyPredictingTick)
+            {
+                return;
+            }
+
             state.CompleteDependency();
+
+
             var speed = SystemAPI.Time.DeltaTime * 0.5f;
-            new ApplyInputJob()
+            new ApplyInputJob
             {
                 speed = speed,
+                tick = SystemAPI.GetSingleton<NetworkTime>().ServerTick
             }.Run();
         }
 
@@ -27,6 +35,8 @@ namespace DefaultNamespace
         private partial struct ApplyInputJob : IJobEntity
         {
             public float speed;
+            public NetworkTick tick;
+
             public void Execute(in CubePlayerInput input, ref LocalTransform transform, ref Gun gun)
             {
                 var moveInput = new float2(input.horizontal, input.vertical);
@@ -35,6 +45,7 @@ namespace DefaultNamespace
                 if (input.shootPressedThisFrame.IsSet)
                 {
                     gun.isShooting = true;
+                    gun.startShootTick = tick;
                 }
 
                 if (input.shootingReleasedThisFrame.IsSet)
@@ -43,6 +54,5 @@ namespace DefaultNamespace
                 }
             }
         }
-
     }
 }
