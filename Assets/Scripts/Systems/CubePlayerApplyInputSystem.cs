@@ -25,8 +25,10 @@ namespace DefaultNamespace
             var speed = SystemAPI.Time.DeltaTime * 0.5f;
             new ApplyInputJob
             {
+                deltaTime = SystemAPI.Time.DeltaTime,
                 speed = speed,
-                tick = SystemAPI.GetSingleton<NetworkTime>().ServerTick
+                tick = SystemAPI.GetSingleton<NetworkTime>().ServerTick,
+                isClient = state.WorldUnmanaged.IsClient(),
             }.Run();
         }
 
@@ -34,8 +36,10 @@ namespace DefaultNamespace
         [WithAll(typeof(Simulate))]
         private partial struct ApplyInputJob : IJobEntity
         {
+            public float deltaTime;
             public float speed;
             public NetworkTick tick;
+            public bool isClient;
 
             public void Execute(in CubePlayerInput input, ref LocalTransform transform, ref Gun gun)
             {
@@ -46,10 +50,25 @@ namespace DefaultNamespace
                 {
                     gun.isShooting = true;
                     gun.startShootTick = tick;
+                    var coolDownTicks = (uint)(gun.coolDown / deltaTime);
+                    var lastShootingTick = tick;
+                    lastShootingTick.Add((uint)(gun.ammo - 1) * coolDownTicks);
+                    if (isClient)
+                    {
+                        Debug.Log($"Shoot Up {tick.TickValue} adding {gun.ammo -1} *{coolDownTicks} lt:{lastShootingTick.TickValue}");
+                    }
+               
+                    gun.lastShootingTick = lastShootingTick;
                 }
 
                 if (input.shootingReleasedThisFrame.IsSet)
                 {
+                    if (isClient)
+                    {
+                        Debug.Log($"Shoot down {tick.TickValue}");
+                    }
+               
+
                     gun.isShooting = false;
                 }
             }

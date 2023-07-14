@@ -1,4 +1,5 @@
-﻿using Unity.Entities;
+﻿using DefaultNamespace;
+using Unity.Entities;
 using Unity.NetCode;
 using UnityEngine;
 
@@ -33,6 +34,7 @@ public partial struct SampleCubeInput : ISystem
             {
                 playerInput.ValueRW.shootingReleasedThisFrame.Set();
             }
+
         }
     }
 }

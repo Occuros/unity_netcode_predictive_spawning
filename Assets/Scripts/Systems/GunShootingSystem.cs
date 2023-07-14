@@ -14,6 +14,7 @@ namespace DefaultNamespace
     {
         public void OnCreate(ref SystemState state)
         {
+            state.RequireForUpdate<NetworkTime>();
             state.RequireForUpdate<NetworkId>();
         }
 
@@ -51,40 +52,70 @@ namespace DefaultNamespace
 
             public void Execute(ref Gun gun, in LocalToWorld ltw)
             {
-                if (gun.isShooting)
+                
+                if (gun.ammo == 0)
                 {
-                    var cooldownTicks = (int)(0.3f / deltaTime);
-
-                    var ticksElapsed = tick.TicksSince(gun.startShootTick);
-
-                    var shootTick = ticksElapsed % cooldownTicks;
-
-                    if (shootTick != 0)
-                    {
-                        return;
-                    }
-
-
-                    if (isClient)
-                    {
-                        Debug.Log($"Client: {tick.TickValue}");
-                    }
-                    else
-                    {
-                        Debug.Log($"Server: {tick.TickValue}");
-                    }
-
-                    var transform = transformLookup[gun.bulletPrefab];
-                    var bulletEntity = ecb.Instantiate(gun.bulletPrefab);
-                    transform.Position = ltw.Position;
-                    transform.Rotation = ltw.Rotation;
-                    ecb.SetComponent(bulletEntity, transform);
-                    ecb.SetComponent(bulletEntity, new PhysicsVelocity
-                    {
-                        Angular = float3.zero,
-                        Linear = ltw.Forward * 10,
-                    });
+                    gun.reloadTimeLeft = math.max(gun.reloadTimeLeft - deltaTime, 0.0f);
                 }
+                
+                if (gun.reloadTimeLeft == 0)
+                {
+                    gun.ammo = gun.maxAmmo;
+                    gun.reloadTimeLeft = gun.reloadTime;
+                }
+                if (isClient)
+                {
+                    Debug.Log($"is shooting {tick.TickValue} {gun.isShooting}");
+                }
+                
+                if (!gun.isShooting) return;
+                // if (isClient)
+                // {
+                //     Debug.Log($"Could be shooting {tick.TickValue}");
+                // }
+
+                var cooldownTicks = (int)(gun.coolDown / deltaTime);
+
+                var ticksElapsed = tick.TicksSince(gun.startShootTick);
+
+                var shootTick = ticksElapsed % cooldownTicks;
+
+                var isEarlyEnough = tick.TicksSince(gun.lastShootingTick) <= 0;
+
+                var canShoot = shootTick == 0 || tick == gun.startShootTick;
+
+                if (!canShoot || !isEarlyEnough || gun.ammo <= 0)
+                {
+                    // if (isClient)
+                    // {
+                    //     Debug.Log($"Client Not shooting: {tick.TickValue} c:{cooldownTicks} te:{ticksElapsed} lt:{gun.lastShootingTick.TickValue} - {canShoot} s:{gun.startShootTick.TickValue} ts:{tick.TicksSince(gun.lastShootingTick)} | {shootTick} | {gun.ammo}");
+                    //
+                    // }
+ 
+                    return;
+                }
+
+                //
+                // if (isClient)
+                // {
+                //     Debug.Log($"Client shot: {tick.TickValue} c:{cooldownTicks} te:{ticksElapsed} lt:{gun.lastShootingTick.TickValue}");
+                // }
+                // else
+                // {
+                //     Debug.Log($"Server shot: {tick.TickValue}");
+                // }
+
+                gun.ammo--;
+                var transform = transformLookup[gun.bulletPrefab];
+                var bulletEntity = ecb.Instantiate(gun.bulletPrefab);
+                transform.Position = ltw.Position;
+                transform.Rotation = ltw.Rotation;
+                ecb.SetComponent(bulletEntity, transform);
+                ecb.SetComponent(bulletEntity, new PhysicsVelocity
+                {
+                    Angular = float3.zero,
+                    Linear = ltw.Forward * 10,
+                });
             }
         }
     }
