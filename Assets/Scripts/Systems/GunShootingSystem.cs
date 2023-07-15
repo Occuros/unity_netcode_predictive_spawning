@@ -1,4 +1,5 @@
-﻿using Unity.Burst;
+﻿using Systems;
+using Unity.Burst;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.NetCode;
@@ -53,37 +54,40 @@ namespace DefaultNamespace
             {
                 if (gun.isShooting)
                 {
-                    var cooldownTicks = (int)(0.3f / deltaTime);
+                    const int fireRate = 3000;
 
-                    var ticksElapsed = tick.TicksSince(gun.startShootTick);
+                    var predictor = new ShootingPredictor(gun.startShootTick, tick, fireRate, deltaTime);
 
-                    var shootTick = ticksElapsed % cooldownTicks;
-
-                    if (shootTick != 0)
+                    foreach (var shot in predictor)
                     {
-                        return;
+                        if (isClient)
+                        {
+                            Debug.Log($"Client: {tick.TickValue}");
+                        }
+                        else
+                        {
+                            Debug.Log($"Server: {tick.TickValue}");
+                        }
+
+                        var transform = transformLookup[gun.bulletPrefab];
+                        transform.Rotation = ltw.Rotation;
+
+
+                        const int bulletVelocity = 10;
+
+                        transform.Position = ltw.Position + bulletVelocity * (transform.Forward() * shot.timePassed);
+
+                        var physicsVelocity = new PhysicsVelocity
+                        {
+                            Angular = float3.zero,
+                            Linear = ltw.Forward * bulletVelocity,
+                        };
+
+
+                        var bulletEntity = ecb.Instantiate(gun.bulletPrefab);
+                        ecb.SetComponent(bulletEntity, transform);
+                        ecb.SetComponent(bulletEntity, physicsVelocity);
                     }
-
-
-                    if (isClient)
-                    {
-                        Debug.Log($"Client: {tick.TickValue}");
-                    }
-                    else
-                    {
-                        Debug.Log($"Server: {tick.TickValue}");
-                    }
-
-                    var transform = transformLookup[gun.bulletPrefab];
-                    var bulletEntity = ecb.Instantiate(gun.bulletPrefab);
-                    transform.Position = ltw.Position;
-                    transform.Rotation = ltw.Rotation;
-                    ecb.SetComponent(bulletEntity, transform);
-                    ecb.SetComponent(bulletEntity, new PhysicsVelocity
-                    {
-                        Angular = float3.zero,
-                        Linear = ltw.Forward * 10,
-                    });
                 }
             }
         }
